@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Editor fotografii</title>
+        <link rel="stylesheet" href="4_1091_MARASTEANU_Theodora.css">
+    </head>
+    <body>
+        <canvas id="visibleCanvas">
+            Your browser does not support the canvas element.
+        </canvas>
+
+        <canvas id="colorHistogramCanvas" width="256" height="100"></canvas>
+
+        <div id="outline">
+            <label for="fileBrowser"></label>
+            <input id="fileBrowser" type="file" accept="image/*">
+        </div>
+        
+        <div id="divButtons">
+            <button data-effect="normal">Normal</button>
+            <button data-effect="greyscale">Greyscale</button>
+            <button data-effect="blue">Blue</button>
+            <button data-effect="sepia">Sepia</button>
+            <button data-effect="threshold">Threshold</button>
+            <button data-effect="invert">Invert</button>
+            <button data-effect="pixelate">Pixelate</button>
+            <button data-effect="yellowlines">YellowLines</button>
+            <button data-action="crop">Crop</button> 
+
+            <button id="btnSave">Save</button>
+            <button id="btnDeleteSelection">Sterge selectia</button>
+           
+        </div>
+        <div id="text">
+        <label for="textADD">Adauga text:</label>
+            <label for="textInput" title="Enter text"></label>
+            <input type="text" id="textInput" placeholder="Enter text">
+            
+            <label for="fontSizeInput" title="Font size"></label>
+            <input type="number" id="fontSizeInput" placeholder="Font size">
+            
+    
+            <label for="xPosition" title="X position"></label>
+            <input type="number" id="xPosition" placeholder="X position">
+    
+            <label for="yPosition" title="Y position"></label>
+            <input type="number" id="yPosition" placeholder="Y position">
+            <label for="colorInput"></label>
+            <input type="color" id="colorInput" value="#000000">
+
+            <button id="btnAddText">Add Text</button>
+        </div>
+            
+        <div id="scaleImage">
+        <label for="scaleImg">Scaleza imaginea:</label>
+            <label for="latime"></label>
+            <input type="number" id="latime" placeholder="Noua lățime">
+                
+            <label for="lungime"></label>
+            <input type="number" id="lungime" placeholder="Noua lungime">
+                
+            <button id="btnScaleImg" onclick="imageEditor.scaleImage(document.getElementById('latime').value, document.getElementById('lungime').value)">Scale</button>
+
+        </div>
+
+        <script src="4_1091_MARASTEANU_Theodora.js"></script>
+
+        <script>
+            'use strict';
+
+            const visibleCanvas = document.getElementById('visibleCanvas');
+            const imageEditor = new ImageEditor(visibleCanvas);
+
+            const colorHistogramCanvas = document.getElementById('colorHistogramCanvas');
+            const colorHistogramContext = colorHistogramCanvas.getContext('2d');
+
+
+            const fileBrowser = document.getElementById('fileBrowser');
+            fileBrowser.addEventListener('change', function(){
+                console.log('Evenimentul change a fost declanșat.');
+                const files = fileBrowser.files;
+                if(files.length > 0){
+                    const file = files[0];
+
+                    const reader = new FileReader();
+                    reader.addEventListener('load', function(){
+                        const dataUrl = reader.result;
+
+                        const img = document.createElement('img');
+                        img.addEventListener('load', function(){
+                            console.log('Fisierul a fost incarcat cu succes');
+
+                            visibleCanvas.width = img.width; 
+                            visibleCanvas.height = img.height;
+                            const context = visibleCanvas.getContext('2d');
+                            context.drawImage(img, 0, 0);
+                            imageEditor.changeImage(img);
+                        });
+
+                        img.addEventListener('error', function(){
+                            console.error('Eroare la incarcarea imaginii.');
+                        });
+                        img.src = dataUrl;
+                    });
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            const buttons = document.querySelectorAll('[data-effect]');
+            buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                imageEditor.changeEffect(button.dataset.effect);
+                });
+            });
+
+            document.getElementById('btnSave').addEventListener('click', function(){
+                imageEditor.saveImage();
+            })
+
+            const cropButton = document.querySelector('[data-action="crop"]');
+            cropButton.addEventListener('click', () => {
+                    imageEditor.isCropping = true;
+                    imageEditor.crop();
+                });
+
+            //BUTONUL ADD
+            const btnAddText = document.getElementById('btnAddText');
+            btnAddText.addEventListener('click', function() {
+                const textInput = document.getElementById('textInput');
+                const fontSizeInput = document.getElementById('fontSizeInput');
+                const colorInput = document.getElementById('colorInput');
+                const xPosition = document.getElementById('xPosition');
+                const yPosition = document.getElementById('yPosition');
+
+                if (textInput && fontSizeInput && colorInput && xPosition && yPosition) {
+                    const text = textInput.value;
+                    const fontSize = parseInt(fontSizeInput.value);
+                    const color = colorInput.value;
+                    const x = parseInt(xPosition.value);
+                    const y = parseInt(yPosition.value);
+                    imageEditor.addText(text, fontSize, color, x, y);
+                } else {
+                        console.error('Unul sau mai multe elemente nu au fost gasite.');
+                }
+            });
+            
+            visibleCanvas.addEventListener('mousedown', (event) => {
+                const mouseX = event.clientX - visibleCanvas.getBoundingClientRect().left;
+                const mouseY = event.clientY - visibleCanvas.getBoundingClientRect().top;
+                if (mouseX >= 0 && mouseX < visibleCanvas.width && mouseY >= 0 && mouseY < visibleCanvas.height) {
+                    if (imageEditor.isCropping) {
+                        imageEditor.startCrop(mouseX, mouseY);
+                    } else {
+                        imageEditor.startSelection(mouseX, mouseY);
+                    }
+                }
+            });
+
+            visibleCanvas.addEventListener('mousemove', (event) => {
+                if (event.buttons === 1){
+                const mouseX = event.clientX - visibleCanvas.getBoundingClientRect().left;
+                const mouseY = event.clientY - visibleCanvas.getBoundingClientRect().top;
+                
+                    if (imageEditor.isCropping) {
+                        imageEditor.updateCrop(mouseX, mouseY);
+                    } else 
+                        if(isShiftPressed && imageEditor.getSelection()){
+                            imageEditor.moveSelection(mouseX, mouseY);
+                        }
+                        else{
+                            imageEditor.updateSelection(mouseX, mouseY);
+                        }
+                    }
+            });
+
+            let buttonPressed= false;
+            
+            const btnDeleteSelection = document.getElementById('btnDeleteSelection');
+            
+            visibleCanvas.addEventListener('mouseup', (event) => {
+                const mouseX = event.clientX - visibleCanvas.getBoundingClientRect().left;
+                const mouseY = event.clientY - visibleCanvas.getBoundingClientRect().top;
+
+                    if (imageEditor.isCropping) {
+                        imageEditor.endCrop(mouseX, mouseY);
+                    } else
+                        if(isShiftPressed && imageEditor.getSelection()){
+                            imageEditor.moveSelectionEnd(mouseX, mouseY);
+                        }
+                        else {
+                            if (buttonPressed) {
+                                imageEditor.endSelection(mouseX, mouseY, true);
+                            } else {
+                                imageEditor.endSelection(mouseX, mouseY, false);
+                            }
+                            buttonPressed = false;
+                        } 
+            });
+            
+            btnDeleteSelection.addEventListener('click', () => {
+                buttonPressed = true;
+            });
+
+            let isShiftPressed = false;
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Shift') {
+                    isShiftPressed = true;
+                }
+            });
+
+            document.addEventListener('keyup', (event) => {
+                if (event.key === 'Shift') {
+                    isShiftPressed = false;
+                }
+            });
+           
+
+        </script>
+    
+    </body>
+</html>
